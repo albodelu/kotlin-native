@@ -324,6 +324,12 @@ class KonanDescriptorSerializer private constructor(
 
         extension.serializeConstructor(descriptor, builder)
 
+        if (extension is IrAwareExtension 
+            && descriptor.needsSerializedIr) {
+            extension.addConstructorIR(builder, 
+                extension.serializeInlineBody(descriptor, {it -> typeId(it)}))
+        }
+
         return builder
     }
 
