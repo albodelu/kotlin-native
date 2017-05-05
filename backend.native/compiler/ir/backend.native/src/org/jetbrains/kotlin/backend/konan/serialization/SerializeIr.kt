@@ -1094,6 +1094,9 @@ internal class IrDeserializer(val context: Context,
             is DeserializedSimpleFunctionDescriptor -> {
                 rootFunction.proto.inlineIr
             }
+            is DeserializedClassConstructorDescriptor -> {
+                rootFunction.proto.constructorIr
+            }
             is PropertyGetterDescriptor -> {
                 (rootMember as DeserializedPropertyDescriptor).proto.getterIr
             }
