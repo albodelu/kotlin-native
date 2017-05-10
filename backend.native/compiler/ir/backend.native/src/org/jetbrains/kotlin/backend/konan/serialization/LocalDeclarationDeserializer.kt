@@ -47,26 +47,33 @@ class LocalDeclarationDeserializer(val rootDescriptor: DeserializedCallableMembe
     val parents = tower.drop(2)
 
     val components = pkg.components
-    val nameResolver = NameResolverImpl(pkg.proto.getStringTable(), pkg.proto.getNameTable())
-    val nameTable = pkg.proto.getNameTable()
-    val typeTable = TypeTable(pkg.proto.getPackage().getTypeTable())
+    val nameTable = pkg.proto.nameTable
+    val nameResolver = NameResolverImpl(pkg.proto.stringTable, nameTable)
+    val packageTypeTable = TypeTable(pkg.proto.getPackage().typeTable)
     val packageContext = components.createContext(
-        pkg, nameResolver, typeTable, SinceKotlinInfoTable.EMPTY, null)
+        pkg, nameResolver, packageTypeTable, SinceKotlinInfoTable.EMPTY, null)
   
     var parentContext = packageContext
+    var parentTypeTable = packageTypeTable
 
     init {
-        // Now walk all the containing declarations to construct
+println("parents = $parents")
+        // Now walk down all the containing declarations to construct
         // the tower of deserialization contexts.
         parents.forEach{
+            // Only packages and classes have their type tables.
+            if (it is DeserializedClassDescriptor) {
+                parentTypeTable = TypeTable(it.classProto.typeTable)
+            }
             parentContext = parentContext.childContext(
-                    it, it.typeParameterProtos, nameResolver, typeTable)
+                    it, it.typeParameterProtos, nameResolver, parentTypeTable)
+println("context for it = $it")
         }
     }
 
     val typeParameterProtos = rootDescriptor.typeParameterProtos
     val childContext = parentContext.childContext(
-        rootDescriptor, typeParameterProtos, nameResolver, typeTable)
+        rootDescriptor, typeParameterProtos, nameResolver, parentTypeTable)
 
     val typeDeserializer = childContext.typeDeserializer
 
@@ -100,21 +107,24 @@ class LocalDeclarationDeserializer(val rootDescriptor: DeserializedCallableMembe
            parent.classProto.typeParameterList
        } else listOf<ProtoBuf.TypeParameter>()
 
-       val childContext = context.childContext(parent, typeParameters, nameResolver, typeTable)
+       val childContext = context.childContext(parent, typeParameters, nameResolver, parentTypeTable)
        return MemberDeserializer(childContext)
 
     }
 */
     private fun memberDeserializer(irProto: KonanIr.KotlinDescriptor): MemberDeserializer {
-        /*
+        
         return if (irProto.hasClassOrPackage()) {
-            memberDeserializerByParentFqNameIndex(irProto.classOrPackage)
+println("hasClassOrPackage() is true")
+            //memberDeserializerByParentFqNameIndex(irProto.classOrPackage)
+            assert(getDescriptorByFqNameIndex(module, irProto.classOrPackage) == rootDescriptor.containingDeclaration)
+            MemberDeserializer(parentContext)
         } else {
+println("hasClassOrPackage() is false")
             // TODO: learn to take the containing IR declaration
             this.memberDeserializer
         }
-        */
-        return MemberDeserializer(parentContext)
+        
     }
 
     fun deserializeFunction(irProto: KonanIr.KotlinDescriptor): FunctionDescriptor =
@@ -124,9 +134,9 @@ class LocalDeclarationDeserializer(val rootDescriptor: DeserializedCallableMembe
 
        val proto = irProto.irLocalDeclaration.descriptor.constructor
        //val memberDeserializer = memberDeserializerByParentFqNameIndex(irProto.classOrPackage)
-       memberDeserializer(irProto)
+       //memberDeserializer(irProto)
        val isPrimary = !Flags.IS_SECONDARY.get(proto.flags)
-       val constructor = memberDeserializer.loadConstructor(proto, isPrimary)
+       val constructor = memberDeserializer(irProto).loadConstructor(proto, isPrimary)
 
        return constructor
     }

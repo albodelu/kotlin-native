@@ -63,7 +63,7 @@ internal class IrDescriptorDeserializer(val context: Context,
     fun deserializeKotlinType(proto: KonanIr.KotlinType): KotlinType {
         val index = proto.getIndex()
         val text = proto.getDebugText()
-        val typeProto = localDeserializer.typeTable[index]
+        val typeProto = localDeserializer.parentTypeTable[index]
         val type = localDeserializer.deserializeInlineType(typeProto)
         if (type.isError) throw KonanIrDeserializationException("Could not deserialize KotlinType: $text $type")
 
