@@ -127,6 +127,12 @@ println("hasClassOrPackage() is false")
         
     }
 
+    fun deserializeClass(irProto: KonanIr.KotlinDescriptor): ClassDescriptor {
+        return DeserializedClassDescriptor(context, irProto.irLocalDeclaration.descriptor.clazz, nameResolver, SourceElement.NO_SOURCE)
+
+
+    }
+
     fun deserializeFunction(irProto: KonanIr.KotlinDescriptor): FunctionDescriptor =
         memberDeserializer(irProto).loadFunction(irProto.irLocalDeclaration.descriptor.function)
 

@@ -76,7 +76,9 @@ internal class IrDescriptorSerializer(
                 -> KonanIr.KotlinDescriptor.Kind.TYPE_PARAMETER
             is ReceiverParameterDescriptor
                 -> KonanIr.KotlinDescriptor.Kind.RECEIVER
-            else -> TODO("Unexpected local descriptor.")
+            is PropertyDescriptor
+                -> KonanIr.KotlinDescriptor.Kind.PROPERTY
+            else -> TODO("Unexpected local descriptor: $descriptor")
         }
 
     fun functionDescriptorSpecifics(descriptor: FunctionDescriptor, proto: KonanIr.KotlinDescriptor.Builder) {
@@ -116,6 +118,10 @@ internal class IrDescriptorSerializer(
         proto.setType(serializeKotlinType(
             descriptor.returnType!!)) 
 
+    }
+
+    fun classDescriptorSpecifics(descriptor: ClassDescriptor, proto: KonanIr.KotlinDescriptor.Builder) {
+        println("class descriptor specifics: $descriptor")
     }
 
     fun variableDescriptorSpecifics(descriptor: VariableDescriptor, proto: KonanIr.KotlinDescriptor.Builder) {

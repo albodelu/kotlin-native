@@ -259,6 +259,24 @@ internal class IrSerializer(val context: Context,
         return proto.build()
     }
 
+    fun serializeFieldAccessCommon(expression: IrFieldAccessExpression): KonanIr.FieldAccessCommon {
+        val proto = KonanIr.FieldAccessCommon.newBuilder()
+            .setDescriptor(serializeDescriptor(expression.descriptor))
+        val superQualifier = expression.superQualifier
+        if (superQualifier != null)
+            proto.setSuper(serializeDescriptor(superQualifier))
+        val receiver = expression.receiver
+        if (receiver != null) 
+            proto.setReciever(serializeExpression(receiver))
+        return proto.build()
+    }
+
+    fun serializeGetField(expression: IrGetField): KonanIr.IrGetField {
+        val proto = KonanIr.IrGetField.newBuilder()
+            .setFieldAccess(serializeFieldAccessCommon(expression))
+        return proto.build()
+    }
+
     fun serializeGetValue(expression: IrGetValue): KonanIr.IrGetValue {
         val proto = KonanIr.IrGetValue.newBuilder()
             .setDescriptor(serializeDescriptor(expression.descriptor))
@@ -282,6 +300,13 @@ internal class IrSerializer(val context: Context,
     fun serializeReturn(expression: IrReturn): KonanIr.IrReturn {
         val proto = KonanIr.IrReturn.newBuilder()
             .setReturnTarget(serializeDescriptor(expression.returnTarget))
+            .setValue(serializeExpression(expression.value))
+        return proto.build()
+    }
+
+    fun serializeSetField(expression: IrSetField): KonanIr.IrSetField {
+        val proto = KonanIr.IrSetField.newBuilder()
+            .setFieldAccess(serializeFieldAccessCommon(expression))
             .setValue(serializeExpression(expression.value))
         return proto.build()
     }
@@ -420,6 +445,7 @@ internal class IrSerializer(val context: Context,
             is IrContinue    -> operationProto.setContinue(serializeContinue(expression))
             is IrDelegatingConstructorCall
                              -> operationProto.setDelegatingConstructorCall(serializeDelegatingConstructorCall(expression))
+            is IrGetField    -> operationProto.setGetField(serializeGetField(expression))
             is IrGetValue    -> operationProto.setGetValue(serializeGetValue(expression))
             is IrGetEnumValue    
                              -> operationProto.setGetEnumValue(serializeGetEnumValue(expression))
@@ -428,6 +454,7 @@ internal class IrSerializer(val context: Context,
             is IrInstanceInitializerCall        
                              -> operationProto.setInstanceInitializerCall(serializeInstanceInitializerCall(expression))
             is IrReturn      -> operationProto.setReturn(serializeReturn(expression))
+            is IrSetField    -> operationProto.setSetField(serializeSetField(expression))
             is IrSetVariable -> operationProto.setSetVariable(serializeSetVariable(expression))
             is IrStringConcatenation 
                              -> operationProto.setStringConcat(serializeStringConcat(expression))
@@ -467,15 +494,15 @@ internal class IrSerializer(val context: Context,
         return proto.build()
     }
 
-    fun serializeFunction(function: IrFunction): KonanIr.IrFunc {
-        val proto = KonanIr.IrFunc.newBuilder()
+    fun serializeIrFunction(function: IrFunction): KonanIr.IrFunction {
+        val proto = KonanIr.IrFunction.newBuilder()
         val body = function.body
         if (body != null)  proto.setBody(serializeStatement(body))
 
         function.descriptor.valueParameters.forEachIndexed { index, it ->
             val default = function.getDefault(it)
             if (default != null) {
-                val pair = KonanIr.IrFunc.DefaultArgument.newBuilder()
+                val pair = KonanIr.IrFunction.DefaultArgument.newBuilder()
                 pair.position = index
                 pair.value = serializeExpression(default.expression)
                 proto.addDefaultArgument(pair)
@@ -485,7 +512,33 @@ internal class IrSerializer(val context: Context,
         return proto.build()
     }
 
-    fun serializeVariable(variable: IrVariable): KonanIr.IrVar {
+    fun serializeIrProperty(property: IrProperty): KonanIr.IrProperty {
+        val proto = KonanIr.IrProperty.newBuilder()
+            .setIsDelegated(property.isDelegated)
+        val backingField = property.backingField
+        val getter = property.getter
+        val setter = property.setter
+        if (backingField != null) 
+            proto.setBackingField(serializeIrField(backingField))
+        if (getter != null) 
+            proto.setGetter(serializeIrFunction(getter))
+        if (setter != null) 
+            proto.setSetter(serializeIrFunction(setter))
+
+        return proto.build()
+    }
+
+    fun serializeIrField(field: IrField): KonanIr.IrProperty.IrField {
+        val proto = KonanIr.IrProperty.IrField.newBuilder()
+        val field = field.initializer?.expression
+        if (field != null) {
+            proto.setInitializer(
+                serializeExpression(field))
+        }
+        return proto.build()
+    }
+
+    fun serializeIrVariable(variable: IrVariable): KonanIr.IrVar {
         val proto = KonanIr.IrVar.newBuilder()
         val initializer = variable.initializer
         if (initializer != null) {
@@ -547,16 +600,18 @@ internal class IrSerializer(val context: Context,
 
         when (declaration) {
             is IrFunction 
-                -> declarator.setFunction(serializeFunction(declaration))
+                -> declarator.setFunction(serializeIrFunction(declaration))
             is IrVariable 
-                -> declarator.setVariable(serializeVariable(declaration))
+                -> declarator.setVariable(serializeIrVariable(declaration))
             is IrClass
                 -> declarator.setIrClass(serializeIrClass(declaration))
             is IrEnumEntry
                 -> declarator.setIrEnumEntry(serializeIrEnumEntry(declaration))
+            is IrProperty
+                -> declarator.setIrProperty(serializeIrProperty(declaration))
             else 
                 -> {
-                TODO("Declaration serialization not supported yet.")
+                TODO("Declaration serialization not supported yet: $declaration")
             }
         }
 
@@ -986,7 +1041,7 @@ internal class IrDeserializer(val context: Context,
 
     }
 
-    fun deserializeIrFunction(proto: KonanIr.IrFunc, descriptor: FunctionDescriptor,
+    fun deserializeIrFunction(proto: KonanIr.IrFunction, descriptor: FunctionDescriptor,
         start: Int, end: Int, origin: IrDeclarationOrigin): IrFunction {
 
         val body = deserializeStatement(proto.getBody())

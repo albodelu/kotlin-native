@@ -304,6 +304,9 @@ internal class KonanSerializationUtil(val context: Context) {
         context.log{"### serializeLocalDeclaration: $descriptor"}
 
         when (descriptor) {
+            is ClassConstructorDescriptor ->
+                proto.setConstructor(serializer.constructorProto(descriptor))
+
             is FunctionDescriptor ->
                 proto.setFunction(serializer.functionProto(descriptor))
 

@@ -77,22 +77,28 @@ internal class IrDescriptorDeserializer(val context: Context,
     }
     fun deserializeLocalDeclaration(irProto: KonanIr.KotlinDescriptor): DeclarationDescriptor {
         val localDeclarationProto = irProto.irLocalDeclaration.descriptor
+        val index = irProto.index
         when {
             localDeclarationProto.hasFunction() -> {
-                val index = irProto.index
                 val descriptor = localDeserializer.deserializeFunction(irProto)
                 descriptorIndex.put(index, descriptor)
                 return descriptor
             }
-
             localDeclarationProto.hasProperty() -> {
-                val index = irProto.index
                 val descriptor = localDeserializer.deserializeProperty(irProto)
                 descriptorIndex.put(index, descriptor)
                 return descriptor
             }
-            // TODO
-            //  localDclarationProto.hasClazz() -> 
+            localDeclarationProto.hasClazz() -> {
+                val descriptor = localDeserializer.deserializeClass(irProto)
+                descriptorIndex.put(index, descriptor)
+                return descriptor
+            }
+            localDeclarationProto.hasConstructor() -> {
+                val descriptor = localDeserializer.deserializeConstructor(irProto)
+                descriptorIndex.put(index, descriptor)
+                return descriptor
+            }
             else -> TODO("Unexpected descriptor kind")
         }
     }
@@ -108,6 +114,10 @@ internal class IrDescriptorDeserializer(val context: Context,
             KonanIr.KotlinDescriptor.Kind.VALUE_PARAMETER,
             KonanIr.KotlinDescriptor.Kind.TYPE_PARAMETER,
             KonanIr.KotlinDescriptor.Kind.RECEIVER,
+            // Properties can only be found in local
+            // classes, so no need to look for them
+            // in the public descriptor tree.
+            KonanIr.KotlinDescriptor.Kind.PROPERTY,
             KonanIr.KotlinDescriptor.Kind.VARIABLE ->
                 descriptorIndex[index]!!
 
@@ -130,6 +140,7 @@ internal class IrDescriptorDeserializer(val context: Context,
         context.log{"### deserializeDescriptor ${proto.kind} ${proto.index}"}
 
         val descriptor = if (proto.hasIrLocalDeclaration()) {
+println("has local")
             deserializeLocalDeclaration(proto)
         } else 
             deserializeKnownDescriptor(proto)
@@ -141,7 +152,10 @@ internal class IrDescriptorDeserializer(val context: Context,
         // Now there are several descriptors that automatically
         // recreated in addition to this one. Register them
         // all too.
-       
+
+        if (descriptor is PropertyDescriptor) {
+            println("register getter and setter?: $descriptor")
+        }
         if (descriptor is FunctionDescriptor) {
             registerParameterDescriptors(proto, descriptor)
         }
@@ -181,6 +195,7 @@ internal class IrDescriptorDeserializer(val context: Context,
 
         val dispatchReceiver = functionDescriptor.dispatchReceiverParameter
         if (dispatchReceiver != null) {
+            println(functionDescriptor)
             assert(proto.hasDispatchReceiverUniqId())
             val dispatchReceiverIndex = proto.dispatchReceiverIndex
             descriptorIndex.put(dispatchReceiverIndex, dispatchReceiver)
