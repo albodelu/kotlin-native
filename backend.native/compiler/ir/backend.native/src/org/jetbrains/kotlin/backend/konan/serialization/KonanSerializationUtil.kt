@@ -152,7 +152,7 @@ internal class KonanSerializationUtil(val context: Context) {
 
     val serializerExtension = KonanSerializerExtension(context, this)
     val serializer = KonanDescriptorSerializer.createTopLevel(serializerExtension)
-    val typeSerializer: (KotlinType)->Int = { it -> serializer.typeId(it) }
+    //val typeSerializer: (KotlinType)->Int = { it -> serializer.typeId(it) }
 
     fun serializeClass(packageName: FqName,
         builder: KonanLinkData.Classes.Builder,  
