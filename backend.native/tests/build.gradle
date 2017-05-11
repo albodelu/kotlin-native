@@ -1741,7 +1741,10 @@ task deserialized_members(type: LinkKonanTest) {
         "third levelxz\n"+
         "inner first level\n"+
         "inner second level\n"+
-        "inner third level\n"
+        "inner third level\n"+
+        "types first level: 13\n"+
+        "types second level cha-cha-cha\n"+
+        "types third level 1\n"
     lib = "serialization/serialize_members.kt"
     source = "serialization/deserialize_members.kt"
 }
