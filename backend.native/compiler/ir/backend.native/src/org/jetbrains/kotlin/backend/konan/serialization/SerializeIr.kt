@@ -550,12 +550,16 @@ internal class IrSerializer(val context: Context,
     fun serializeIrClass(clazz: IrClass): KonanIr.IrClass {
         val proto = KonanIr.IrClass.newBuilder()
         val declarations = clazz.declarations
+
+// TODO: let's pretend all IrClasses are empty.
+/*
         declarations.forEach {
             val descriptor = it.descriptor
             if (descriptor !is CallableMemberDescriptor || descriptor.kind.isReal) {
                 proto.addMember(serializeDeclaration(it))
             }
         }
+        */
         return proto.build()
     }
 
@@ -638,16 +642,18 @@ internal class IrDeserializer(val context: Context,
     val loopIndex = mutableMapOf<Int, IrLoop>()
 
     val rootMember = rootFunction.deserializedPropertyIfAccessor
-    val localDeserializer = LocalDeclarationDeserializer(rootMember, context.moduleDescriptor)
+    val localDeserializer = LocalDeclarationDeserializer(rootMember/*, context.moduleDescriptor*/)
 
     val descriptorDeserializer = IrDescriptorDeserializer(
         context, rootMember, localDeserializer)
 
+    var currentParent: DeclarationDescriptor = rootMember
+
     fun deserializeKotlinType(proto: KonanIr.KotlinType) 
         = descriptorDeserializer.deserializeKotlinType(proto)
 
-    fun deserializeDescriptor(proto: KonanIr.KotlinDescriptor) 
-        = descriptorDeserializer.deserializeDescriptor(proto)
+    fun deserializeDescriptor(proto: KonanIr.KotlinDescriptor, parent: DeclarationDescriptor? = null) 
+        = descriptorDeserializer.deserializeDescriptor(proto, parent)
 
     fun deserializeTypeMap(descriptor: CallableDescriptor, proto: KonanIr.TypeMap): 
         Map<TypeParameterDescriptor, KotlinType> {
@@ -1064,7 +1070,10 @@ internal class IrDeserializer(val context: Context,
     fun deserializeIrVariable(proto: KonanIr.IrVar, descriptor: VariableDescriptor, 
         start: Int, end: Int, origin: IrDeclarationOrigin): IrVariable {
 
+        val previousParent = currentParent
+        currentParent = descriptor.containingDeclaration
         val initializer = deserializeExpression(proto.getInitializer())
+        currentParent = previousParent
         val variable = IrVariableImpl(start, end, origin, descriptor, initializer)
 
         return variable
@@ -1084,7 +1093,9 @@ internal class IrDeserializer(val context: Context,
 
     fun deserializeDeclaration(proto: KonanIr.IrDeclaration): IrDeclaration {
 
-        val descriptor = deserializeDescriptor(proto.descriptor)
+        val descriptor = deserializeDescriptor(proto.descriptor, currentParent)
+        val previousParent = currentParent
+        currentParent = descriptor
 
         val start = proto.getCoordinates().getStartOffset()
         val end = proto.getCoordinates().getEndOffset()
@@ -1108,6 +1119,7 @@ internal class IrDeserializer(val context: Context,
                 TODO("Declaration deserialization not implemented")
             }
         }
+        currentParent = previousParent
         context.log{"Deserialized declaration: ${ir2string(declaration)}"}
         return declaration
     }
@@ -1123,8 +1135,9 @@ internal class IrDeserializer(val context: Context,
     // I tried to copy over TypeDeserializaer, MemberDeserializer, 
     // and the rest of what's needed, but it didn't work out.
     fun adaptDeserializedTypeParameters(declaration: IrDeclaration): IrDeclaration {
+
         val rootFunctionTypeParameters = 
-            descriptorDeserializer.localDeserializer.childContext.typeDeserializer.ownTypeParameters
+            LocalDeclarationDeserializer(rootMember).parentContext.typeDeserializer.ownTypeParameters
 
         val realTypeParameters =
             rootFunction.deserializedPropertyIfAccessor.typeParameters
@@ -1168,7 +1181,7 @@ internal class IrDeserializer(val context: Context,
         val base64 = inlineProto.encodedIr
         val byteArray = base64Decode(base64)
         val irProto = KonanIr.IrDeclaration.parseFrom(byteArray, KonanSerializerProtocol.extensionRegistry)
-        val declaration =  deserializeDeclaration(irProto)
+        val declaration = deserializeDeclaration(irProto)
 
         val copyFunctionDeclaration = adaptDeserializedTypeParameters(declaration)
 

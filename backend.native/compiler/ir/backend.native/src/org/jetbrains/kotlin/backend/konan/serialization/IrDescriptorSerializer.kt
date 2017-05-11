@@ -49,6 +49,7 @@ internal class IrDescriptorSerializer(
             type
         }
         val index = typeSerializer(typeToSerialize)
+        context.log{"index = $index"}
         val proto = KonanIr.KotlinType.newBuilder()
             .setIndex(index)
             .setDebugText(type.toString())
@@ -138,6 +139,7 @@ internal class IrDescriptorSerializer(
         }
 
         val classOrPackage = descriptor.classOrPackage
+println("class or package for $descriptor is  $classOrPackage")
         val parentFqNameIndex = if (classOrPackage is ClassOrPackageFragmentDescriptor) {
             stringTable.getClassOrPackageFqNameIndex(classOrPackage)
         } else null
@@ -159,6 +161,7 @@ internal class IrDescriptorSerializer(
 
         if (parentFqNameIndex != null)
             proto.setClassOrPackage(parentFqNameIndex)
+println("parentFqNameIndex = $parentFqNameIndex")
 
         when (descriptor) {
             is FunctionDescriptor ->

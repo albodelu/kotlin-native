@@ -33,7 +33,6 @@ internal fun NameResolverImpl.getDescriptorByFqNameIndex(
     fqNameIndex: Int): DeclarationDescriptor {
 
     val packageName = this.getPackageFqName(fqNameIndex)
-    if (packageName.isRoot) return module.getPackage(FqName.ROOT)
     // TODO: Here we are using internals of NameresolverImpl. 
     // Consider extending NameResolver.
     val proto = nameTable.getQualifiedName(fqNameIndex)
@@ -42,7 +41,7 @@ internal fun NameResolverImpl.getDescriptorByFqNameIndex(
         QualifiedName.Kind.LOCAL ->
             return module.findClassAcrossModuleDependencies(this.getClassId(fqNameIndex))!!
         QualifiedName.Kind.PACKAGE ->
-            return module.getPackage(packageName)
+            return module.getPackage(if (packageName.isRoot) FqName.ROOT else packageName)
     }
 }
 

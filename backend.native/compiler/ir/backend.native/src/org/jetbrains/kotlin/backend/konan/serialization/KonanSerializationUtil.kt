@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.backend.konan.LinkData
 import org.jetbrains.kotlin.backend.konan.KonanBuiltIns
 import org.jetbrains.kotlin.backend.konan.llvm.base64Decode
 import org.jetbrains.kotlin.backend.konan.llvm.base64Encode
+import org.jetbrains.kotlin.backend.konan.llvm.isExported
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.descriptors.*
@@ -152,13 +153,18 @@ internal class KonanSerializationUtil(val context: Context) {
 
     val serializerExtension = KonanSerializerExtension(context, this)
     val serializer = KonanDescriptorSerializer.createTopLevel(serializerExtension)
-    //val typeSerializer: (KotlinType)->Int = { it -> serializer.typeId(it) }
+    var lastClassSerializer: KonanDescriptorSerializer = serializer
 
     fun serializeClass(packageName: FqName,
         builder: KonanLinkData.Classes.Builder,  
         classDescriptor: ClassDescriptor) {
 
-        val localSerializer = KonanDescriptorSerializer.create(classDescriptor, serializerExtension)
+        val previousClassSerializer = lastClassSerializer
+        val localSerializer = if (classDescriptor.isExported())
+            KonanDescriptorSerializer.create(classDescriptor, serializerExtension)
+        else 
+            lastClassSerializer
+        lastClassSerializer = localSerializer
         val classProto = localSerializer.classProto(classDescriptor).build()
             ?: error("Class not serialized: $classDescriptor")
 
@@ -169,6 +175,7 @@ internal class KonanSerializationUtil(val context: Context) {
         serializeClasses(packageName, builder, 
             classDescriptor.unsubstitutedInnerClassesScope
                 .getContributedDescriptors(DescriptorKindFilter.CLASSIFIERS))
+        lastClassSerializer = previousClassSerializer
     }
 
     fun serializeClasses(packageName: FqName, 
@@ -303,23 +310,27 @@ internal class KonanSerializationUtil(val context: Context) {
 
         context.log{"### serializeLocalDeclaration: $descriptor"}
 
+        val parent = descriptor.classOrPackage
+
+        val localSerializer = lastClassSerializer
+
         when (descriptor) {
             is ClassConstructorDescriptor ->
-                proto.setConstructor(serializer.constructorProto(descriptor))
+                proto.setConstructor(localSerializer.constructorProto(descriptor))
 
             is FunctionDescriptor ->
-                proto.setFunction(serializer.functionProto(descriptor))
+                proto.setFunction(localSerializer.functionProto(descriptor))
 
             is PropertyDescriptor ->
-                proto.setProperty(serializer.propertyProto(descriptor))
+                proto.setProperty(localSerializer.propertyProto(descriptor))
 
             is ClassDescriptor ->
-                proto.setClazz(serializer.classProto(descriptor))
+                proto.setClazz(localSerializer.classProto(descriptor))
 
             is VariableDescriptor -> {
                 val property = variableAsProperty(descriptor)
                 serializerExtension.originalVariables.put(property, descriptor)
-                proto.setProperty(serializer.propertyProto(property))
+                proto.setProperty(localSerializer.propertyProto(property))
             }
 
             else -> error("Unexpected descriptor kind: $descriptor")

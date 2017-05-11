@@ -230,11 +230,11 @@ class KonanDescriptorSerializer private constructor(
         if (extension is IrAwareExtension) {
             descriptor.getter?.onlyIf({needsSerializedIr}) {
                 extension.addGetterIR(builder,
-                    extension.serializeInlineBody(it, {it -> typeId(it)}))
+                    extension.serializeInlineBody(it, {it -> local.typeId(it)}))
             }
             descriptor.setter?.onlyIf({needsSerializedIr}) {
                 extension.addSetterIR(builder,
-                    extension.serializeInlineBody(it, {it -> typeId(it)}))
+                    extension.serializeInlineBody(it, {it -> local.typeId(it)}))
             }
         }
 
@@ -282,6 +282,12 @@ class KonanDescriptorSerializer private constructor(
             builder.addValueParameter(local.valueParameter(valueParameterDescriptor))
         }
 
+        if (extension is IrAwareExtension
+                && descriptor.needsSerializedIr) {
+            extension.addFunctionIR(builder,
+                    extension.serializeInlineBody(descriptor, {it -> local.typeId(it)}))
+        }
+
         if (serializeTypeTableToFunction) {
             val typeTableProto = typeTable.serialize()
             if (typeTableProto != null) {
@@ -294,12 +300,6 @@ class KonanDescriptorSerializer private constructor(
         }
 
         extension.serializeFunction(descriptor, builder)
-
-        if (extension is IrAwareExtension 
-            && descriptor.needsSerializedIr) {
-            extension.addFunctionIR(builder, 
-                extension.serializeInlineBody(descriptor, {it -> typeId(it)}))
-        }
 
         return builder
     }
@@ -327,7 +327,7 @@ class KonanDescriptorSerializer private constructor(
         if (extension is IrAwareExtension 
             && descriptor.needsSerializedIr) {
             extension.addConstructorIR(builder, 
-                extension.serializeInlineBody(descriptor, {it -> typeId(it)}))
+                extension.serializeInlineBody(descriptor, {it -> local.typeId(it)}))
         }
 
         return builder

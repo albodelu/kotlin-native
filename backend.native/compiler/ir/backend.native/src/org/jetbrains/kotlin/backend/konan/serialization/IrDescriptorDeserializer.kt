@@ -75,9 +75,11 @@ internal class IrDescriptorDeserializer(val context: Context,
         context.log{"### deserialized Kotlin Type index=$index, text=$text:\t$realType"}
         return realType
     }
-    fun deserializeLocalDeclaration(irProto: KonanIr.KotlinDescriptor): DeclarationDescriptor {
+
+    fun deserializeLocalDeclaration(irProto: KonanIr.KotlinDescriptor, parent: DeclarationDescriptor): DeclarationDescriptor {
         val localDeclarationProto = irProto.irLocalDeclaration.descriptor
         val index = irProto.index
+        val localDeserializer = LocalDeclarationDeserializer(parent/*, context.moduleDescriptor*/)
         when {
             localDeclarationProto.hasFunction() -> {
                 val descriptor = localDeserializer.deserializeFunction(irProto)
@@ -135,13 +137,14 @@ internal class IrDescriptorDeserializer(val context: Context,
     }
 
 
-    fun deserializeDescriptor(proto: KonanIr.KotlinDescriptor): DeclarationDescriptor {
+    fun deserializeDescriptor(proto: KonanIr.KotlinDescriptor, parent: DeclarationDescriptor? = null): DeclarationDescriptor {
 
         context.log{"### deserializeDescriptor ${proto.kind} ${proto.index}"}
+        if (parent != null) context.log{"parent = $parent"}
 
         val descriptor = if (proto.hasIrLocalDeclaration()) {
 println("has local")
-            deserializeLocalDeclaration(proto)
+            deserializeLocalDeclaration(proto, parent!!)
         } else 
             deserializeKnownDescriptor(proto)
         
@@ -317,7 +320,7 @@ println("has local")
     fun matchNameInParentScope(proto: KonanIr.KotlinDescriptor): Collection<DeclarationDescriptor> {
         val classOrPackage = proto.classOrPackage
         val name = proto.name
-
+println("looking for $name")
         when (proto.kind) {
             KotlinDescriptor.Kind.CLASS -> {
                 val parentScope = 
@@ -329,6 +332,7 @@ println("has local")
             }
             KotlinDescriptor.Kind.CONSTRUCTOR -> {
                 val parent = parentByFqNameIndex(classOrPackage)
+println("parent = $parent (index = $classOrPackage) ${nameResolver.getName(classOrPackage)}")
                 assert(parent is ClassDescriptor)
                 return (parent as ClassDescriptor).constructors
             }
