@@ -139,7 +139,6 @@ internal class IrDescriptorSerializer(
         }
 
         val classOrPackage = descriptor.classOrPackage
-println("class or package for $descriptor is  $classOrPackage")
         val parentFqNameIndex = if (classOrPackage is ClassOrPackageFragmentDescriptor) {
             stringTable.getClassOrPackageFqNameIndex(classOrPackage)
         } else null
@@ -161,7 +160,6 @@ println("class or package for $descriptor is  $classOrPackage")
 
         if (parentFqNameIndex != null)
             proto.setClassOrPackage(parentFqNameIndex)
-println("parentFqNameIndex = $parentFqNameIndex")
 
         when (descriptor) {
             is FunctionDescriptor ->

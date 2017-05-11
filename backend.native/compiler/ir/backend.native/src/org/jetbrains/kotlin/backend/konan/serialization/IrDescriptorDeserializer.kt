@@ -79,7 +79,7 @@ internal class IrDescriptorDeserializer(val context: Context,
     fun deserializeLocalDeclaration(irProto: KonanIr.KotlinDescriptor, parent: DeclarationDescriptor): DeclarationDescriptor {
         val localDeclarationProto = irProto.irLocalDeclaration.descriptor
         val index = irProto.index
-        val localDeserializer = LocalDeclarationDeserializer(parent/*, context.moduleDescriptor*/)
+        val localDeserializer = LocalDeclarationDeserializer(parent)
         when {
             localDeclarationProto.hasFunction() -> {
                 val descriptor = localDeserializer.deserializeFunction(irProto)
@@ -140,10 +140,7 @@ internal class IrDescriptorDeserializer(val context: Context,
     fun deserializeDescriptor(proto: KonanIr.KotlinDescriptor, parent: DeclarationDescriptor? = null): DeclarationDescriptor {
 
         context.log{"### deserializeDescriptor ${proto.kind} ${proto.index}"}
-        if (parent != null) context.log{"parent = $parent"}
-
         val descriptor = if (proto.hasIrLocalDeclaration()) {
-println("has local")
             deserializeLocalDeclaration(proto, parent!!)
         } else 
             deserializeKnownDescriptor(proto)
@@ -156,9 +153,6 @@ println("has local")
         // recreated in addition to this one. Register them
         // all too.
 
-        if (descriptor is PropertyDescriptor) {
-            println("register getter and setter?: $descriptor")
-        }
         if (descriptor is FunctionDescriptor) {
             registerParameterDescriptors(proto, descriptor)
         }
@@ -198,7 +192,6 @@ println("has local")
 
         val dispatchReceiver = functionDescriptor.dispatchReceiverParameter
         if (dispatchReceiver != null) {
-            println(functionDescriptor)
             assert(proto.hasDispatchReceiverUniqId())
             val dispatchReceiverIndex = proto.dispatchReceiverIndex
             descriptorIndex.put(dispatchReceiverIndex, dispatchReceiver)
@@ -320,7 +313,6 @@ println("has local")
     fun matchNameInParentScope(proto: KonanIr.KotlinDescriptor): Collection<DeclarationDescriptor> {
         val classOrPackage = proto.classOrPackage
         val name = proto.name
-println("looking for $name")
         when (proto.kind) {
             KotlinDescriptor.Kind.CLASS -> {
                 val parentScope = 
@@ -332,7 +324,6 @@ println("looking for $name")
             }
             KotlinDescriptor.Kind.CONSTRUCTOR -> {
                 val parent = parentByFqNameIndex(classOrPackage)
-println("parent = $parent (index = $classOrPackage) ${nameResolver.getName(classOrPackage)}")
                 assert(parent is ClassDescriptor)
                 return (parent as ClassDescriptor).constructors
             }

@@ -642,7 +642,7 @@ internal class IrDeserializer(val context: Context,
     val loopIndex = mutableMapOf<Int, IrLoop>()
 
     val rootMember = rootFunction.deserializedPropertyIfAccessor
-    val localDeserializer = LocalDeclarationDeserializer(rootMember/*, context.moduleDescriptor*/)
+    val localDeserializer = LocalDeclarationDeserializer(rootMember)
 
     val descriptorDeserializer = IrDescriptorDeserializer(
         context, rootMember, localDeserializer)
