@@ -30,6 +30,7 @@ import org.jetbrains.kotlin.resolve.calls.tasks.createSynthesizedInvokes
 import org.jetbrains.kotlin.resolve.scopes.MemberScope
 import org.jetbrains.kotlin.serialization.KonanIr
 import org.jetbrains.kotlin.serialization.KonanIr.KotlinDescriptor
+import org.jetbrains.kotlin.serialization.KonanIr.DeclarationDescriptor.DescriptorCase.*
 import org.jetbrains.kotlin.serialization.KonanLinkData
 import org.jetbrains.kotlin.serialization.ProtoBuf
 import org.jetbrains.kotlin.serialization.deserialization.NameResolver
@@ -80,29 +81,19 @@ internal class IrDescriptorDeserializer(val context: Context,
         val localDeclarationProto = irProto.irLocalDeclaration.descriptor
         val index = irProto.index
         val localDeserializer = LocalDeclarationDeserializer(parent)
-        when {
-            localDeclarationProto.hasFunction() -> {
-                val descriptor = localDeserializer.deserializeFunction(irProto)
-                descriptorIndex.put(index, descriptor)
-                return descriptor
-            }
-            localDeclarationProto.hasProperty() -> {
-                val descriptor = localDeserializer.deserializeProperty(irProto)
-                descriptorIndex.put(index, descriptor)
-                return descriptor
-            }
-            localDeclarationProto.hasClazz() -> {
-                val descriptor = localDeserializer.deserializeClass(irProto)
-                descriptorIndex.put(index, descriptor)
-                return descriptor
-            }
-            localDeclarationProto.hasConstructor() -> {
-                val descriptor = localDeserializer.deserializeConstructor(irProto)
-                descriptorIndex.put(index, descriptor)
-                return descriptor
-            }
+        val descriptor: DeclarationDescriptor = when(localDeclarationProto.descriptorCase) {
+            FUNCTION ->
+                localDeserializer.deserializeFunction(irProto)
+            PROPERTY ->
+                localDeserializer.deserializeProperty(irProto)
+            CLAZZ ->
+                localDeserializer.deserializeClass(irProto)
+            CONSTRUCTOR ->
+                localDeserializer.deserializeConstructor(irProto)
             else -> TODO("Unexpected descriptor kind")
         }
+        descriptorIndex.put(index, descriptor)
+        return descriptor
     }
 
     // Either (a substitution of) a public descriptor

@@ -49,7 +49,6 @@ internal class IrDescriptorSerializer(
             type
         }
         val index = typeSerializer(typeToSerialize)
-        context.log{"index = $index"}
         val proto = KonanIr.KotlinType.newBuilder()
             .setIndex(index)
             .setDebugText(type.toString())
@@ -119,10 +118,6 @@ internal class IrDescriptorSerializer(
         proto.setType(serializeKotlinType(
             descriptor.returnType!!)) 
 
-    }
-
-    fun classDescriptorSpecifics(descriptor: ClassDescriptor, proto: KonanIr.KotlinDescriptor.Builder) {
-        println("class descriptor specifics: $descriptor")
     }
 
     fun variableDescriptorSpecifics(descriptor: VariableDescriptor, proto: KonanIr.KotlinDescriptor.Builder) {

@@ -549,10 +549,13 @@ internal class IrSerializer(val context: Context,
 
     fun serializeIrClass(clazz: IrClass): KonanIr.IrClass {
         val proto = KonanIr.IrClass.newBuilder()
-        val declarations = clazz.declarations
 
-// TODO: let's pretend all IrClasses are empty.
-/*
+        // TODO: As of now we get here only for anonymous local objects.
+        // There is still some work needed to support them.
+        // Until it is done, let's pretend all IrClasses are empty.
+        // So that we don't have to deal with their type tables.
+        /*
+        val declarations = clazz.declarations
         declarations.forEach {
             val descriptor = it.descriptor
             if (descriptor !is CallableMemberDescriptor || descriptor.kind.isReal) {

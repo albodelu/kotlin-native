@@ -282,12 +282,6 @@ class KonanDescriptorSerializer private constructor(
             builder.addValueParameter(local.valueParameter(valueParameterDescriptor))
         }
 
-        if (extension is IrAwareExtension
-                && descriptor.needsSerializedIr) {
-            extension.addFunctionIR(builder,
-                    extension.serializeInlineBody(descriptor, {it -> local.typeId(it)}))
-        }
-
         if (serializeTypeTableToFunction) {
             val typeTableProto = typeTable.serialize()
             if (typeTableProto != null) {
@@ -300,6 +294,12 @@ class KonanDescriptorSerializer private constructor(
         }
 
         extension.serializeFunction(descriptor, builder)
+
+        if (extension is IrAwareExtension
+                && descriptor.needsSerializedIr) {
+            extension.addFunctionIR(builder,
+                    extension.serializeInlineBody(descriptor, {it -> local.typeId(it)}))
+        }
 
         return builder
     }
