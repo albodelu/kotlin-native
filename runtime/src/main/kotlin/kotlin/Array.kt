@@ -22,7 +22,7 @@ import konan.internal.InlineConstructor
 @ExportTypeInfo("theArrayTypeInfo")
 public final class Array<T> {
     // Constructors are handled with compiler magic.
-    @InlineConstructor
+    //@InlineConstructor
     public constructor(size: Int, init: (Int) -> T): this(size) {
         var index = 0
         while (index < size) {
