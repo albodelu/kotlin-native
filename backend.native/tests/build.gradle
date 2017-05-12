@@ -1749,6 +1749,16 @@ task deserialized_members(type: LinkKonanTest) {
     source = "serialization/deserialize_members.kt"
 }
 
+task deserialized_constructor0(type: LinkKonanTest) {
+    disabled = true // the same issue as in inline_constructor0
+    goldValue = 
+        "a variable in inline constructor: 23\n" +
+        "a variable initialized by inline constructor: 19\n" +
+        "a variable in inline constructor: 19\n"
+    lib = "serialization/serialize_constructor.kt"
+    source = "serialization/deserialize_constructor.kt"
+}
+
 // Just check that the driver is able to produce runnable binaries.
 task driver0(type: RunDriverKonanTest) {
     goldValue = "Hello, world!\n"
