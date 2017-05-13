@@ -147,7 +147,7 @@ internal class IrDescriptorSerializer(
         context.log{"originalIndex = $originalIndex"}
         context.log{""}
 
-        val proto =  KonanIr.KotlinDescriptor.newBuilder()
+        val proto = KonanIr.KotlinDescriptor.newBuilder()
             .setName(descriptor.name.asString())
             .setKind(kotlinDescriptorKind(descriptor))
             .setIndex(index)

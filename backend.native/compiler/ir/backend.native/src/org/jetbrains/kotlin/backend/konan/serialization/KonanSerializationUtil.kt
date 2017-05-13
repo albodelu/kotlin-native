@@ -56,6 +56,23 @@ import java.io.InputStream
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
+/*
+ * This is Konan specific part of public descriptor 
+ * tree serialization and deserialization.
+ *
+ * It takes care of module and package fragment serializations.
+ * The lower level (classes and members) serializations are delegated 
+ * to the KonanDescriptorSerializer class.
+ * The lower level deserializations are performed by the frontend
+ * with MemberDeserializer class.
+ *
+ * It also provides a service to IR serializer to serialize descriptors
+ * not included into the public descriptor tree. 
+ * I.e. function local declarations.
+ * Mostly by delegating to KonanDescriptorSerializer too.
+ * The counterpart deserialzation is provided by LocalDeclarationDesrializer class.
+ */
+
 typealias Base64 = String
 
 fun byteArrayToBase64(byteArray: ByteArray): Base64 {
@@ -160,7 +177,9 @@ internal class KonanSerializationUtil(val context: Context) {
         classDescriptor: ClassDescriptor) {
 
         val previousSerializer = localSerializer
-        if (classDescriptor.isExported())
+
+        // TODO: this is to filter out object{}. Change me.
+        if (classDescriptor.isExported()) 
             localSerializer = KonanDescriptorSerializer.create(classDescriptor, serializerExtension)
 
         val classProto = localSerializer.classProto(classDescriptor).build()

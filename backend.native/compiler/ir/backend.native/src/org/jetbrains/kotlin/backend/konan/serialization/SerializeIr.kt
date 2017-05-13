@@ -718,7 +718,7 @@ internal class IrDeserializer(val context: Context,
             }
         }
 
-        context.log{"Deserialized statement: ${ir2string(element)}"}
+        context.log{"### Deserialized statement: ${ir2string(element)}"}
 
         return element
     }
@@ -1029,7 +1029,7 @@ internal class IrDeserializer(val context: Context,
         val operation = proto.getOperation()
         val expression = deserializeOperation(operation, start, end, type)
 
-        context.log{"Deserialized expression: ${ir2string(expression)}"}
+        context.log{"### Deserialized expression: ${ir2string(expression)}"}
         return expression
     }
 
@@ -1121,7 +1121,7 @@ internal class IrDeserializer(val context: Context,
 
         if (!(descriptor is VariableDescriptor) && descriptor != rootFunction)
             localDeserializer.popContext(descriptor)
-        context.log{"Deserialized declaration: ${ir2string(declaration)}"}
+        context.log{"### Deserialized declaration: ${ir2string(declaration)}"}
         return declaration
     }
 
