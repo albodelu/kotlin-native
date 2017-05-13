@@ -50,6 +50,9 @@ import org.jetbrains.kotlin.storage.LockBasedStorageManager
 import org.jetbrains.kotlin.storage.StorageManager
 import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.SimpleType
+import org.jetbrains.kotlin.backend.common.peek
+import org.jetbrains.kotlin.backend.common.push
+import org.jetbrains.kotlin.backend.common.pop
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 import java.io.InputStream
@@ -322,6 +325,36 @@ internal class KonanSerializationUtil(val context: Context) {
         return property
     }
 
+    // TODO: This is not exactly correct.
+    // It rather should be the root function context,
+    // but it is in KonanDescriptorSerializer.
+    // May be we just need to expose it instead of the
+    // type serializer from there.
+    private val contextStack = mutableListOf<KonanDescriptorSerializer>()
+
+    fun initContext(serializer: KonanDescriptorSerializer) {
+println("init context: $serializer")
+        contextStack.push(serializer)
+
+    }
+
+    fun pushContext(descriptor: DeclarationDescriptor) {
+println("push context: $descriptor")
+        val previousContext = contextStack.peek()!!
+
+        val newSerializer = previousContext.createChildSerializer(descriptor)
+        contextStack.push(newSerializer)
+    }
+
+    fun popContext(descriptor: DeclarationDescriptor) {
+        //assert(contextStack.peek()!!.containingDeclaration == descriptor)
+println("pop context: $descriptor")
+        contextStack.pop()
+    }
+
+    val typeSerializer: ((KotlinType)->Int)
+        get() = {it -> contextStack.peek()!!.typeId(it)}
+
     fun serializeLocalDeclaration(descriptor: DeclarationDescriptor): KonanIr.DeclarationDescriptor {
 
         val proto = KonanIr.DeclarationDescriptor.newBuilder()
@@ -329,6 +362,8 @@ internal class KonanSerializationUtil(val context: Context) {
         context.log{"### serializeLocalDeclaration: $descriptor"}
 
         val parent = descriptor.classOrPackage
+
+        val localSerializer = contextStack.peek()!!
 
         when (descriptor) {
             is ClassConstructorDescriptor ->

@@ -85,6 +85,7 @@ class LocalDeclarationDeserializer(val rootDescriptor: DeclarationDescriptor) {
             parentTypeTable
         }
 
+
         val oldContext = contextStack.peek()!!.first
 
         return oldContext.childContext(descriptor, 
@@ -102,6 +103,7 @@ class LocalDeclarationDeserializer(val rootDescriptor: DeclarationDescriptor) {
     }
 
     fun deserializeInlineType(type: ProtoBuf.Type): KotlinType {
+
         val result = typeDeserializer.type(type)
 
         return result

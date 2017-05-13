@@ -19,6 +19,7 @@ package org.jetbrains.kotlin.backend.konan.serialization
 import org.jetbrains.kotlin.backend.konan.Context
 import org.jetbrains.kotlin.backend.konan.descriptors.*
 import org.jetbrains.kotlin.descriptors.*
+import org.jetbrains.kotlin.serialization.KonanDescriptorSerializer
 import org.jetbrains.kotlin.descriptors.impl.LocalVariableDescriptor
 import org.jetbrains.kotlin.ir.descriptors.IrTemporaryVariableDescriptor
 import org.jetbrains.kotlin.resolve.DescriptorUtils
@@ -38,7 +39,9 @@ internal class IrDescriptorSerializer(
     val context: Context,
     val descriptorTable: DescriptorTable,
     val stringTable: KonanStringTable,
-    var typeSerializer: ((KotlinType)->Int),
+    //var typeSerializer: ((KotlinType)->Int),
+    val util: KonanSerializationUtil, 
+    val localDescriptorSerializer: KonanDescriptorSerializer,
     var rootFunction: FunctionDescriptor) {
 
     fun serializeKotlinType(type: KotlinType): KonanIr.KotlinType {
@@ -48,7 +51,7 @@ internal class IrDescriptorSerializer(
         } else {
             type
         }
-        val index = typeSerializer(typeToSerialize)
+        val index = util.typeSerializer(typeToSerialize)
         val proto = KonanIr.KotlinType.newBuilder()
             .setIndex(index)
             .setDebugText(type.toString())
@@ -91,7 +94,7 @@ internal class IrDescriptorSerializer(
             // natural order of declaration. Otherwise 
             // they appear in the order of appearence in the 
             // body of the function, and get wrong indices.
-            typeSerializer(it.defaultType)
+            util.typeSerializer(it.defaultType)
         }
 
         descriptor.valueParameters.forEach {
@@ -122,6 +125,7 @@ internal class IrDescriptorSerializer(
 
     fun variableDescriptorSpecifics(descriptor: VariableDescriptor, proto: KonanIr.KotlinDescriptor.Builder) {
         proto.setType(serializeKotlinType(descriptor.type))
+
     }
 
     fun serializeDescriptor(descriptor: DeclarationDescriptor): KonanIr.KotlinDescriptor {

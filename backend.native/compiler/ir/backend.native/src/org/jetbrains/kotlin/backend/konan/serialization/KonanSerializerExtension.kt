@@ -94,11 +94,11 @@ internal class KonanSerializerExtension(val context: Context, val util: KonanSer
     override fun addSetterIR(proto: ProtoBuf.Property.Builder, serializedIR: String) 
         = proto.setSetterIr(inlineBody(serializedIR))
 
-    override fun serializeInlineBody(descriptor: FunctionDescriptor, typeSerializer: ((KotlinType)->Int)): String {
+    override fun serializeInlineBody(descriptor: FunctionDescriptor,/* typeSerializer: ((KotlinType)->Int)*/ serializer: KonanDescriptorSerializer ): String {
 
         return IrSerializer( 
-            context, inlineDescriptorTable, stringTable, util, 
-            typeSerializer, descriptor).serializeInlineBody()
+            context, inlineDescriptorTable, stringTable, util,/* 
+            typeSerializer,*/serializer, descriptor).serializeInlineBody()
     }
 }
 
@@ -120,7 +120,7 @@ object KonanSerializerProtocol : SerializerExtensionProtocol(
 
 internal interface IrAwareExtension {
 
-    fun serializeInlineBody(descriptor: FunctionDescriptor, typeSerializer: ((KotlinType)->Int)): String 
+    fun serializeInlineBody(descriptor: FunctionDescriptor, /*typeSerializer: ((KotlinType)->Int)*/serializer: KonanDescriptorSerializer): String 
 
     fun addFunctionIR(proto: ProtoBuf.Function.Builder, serializedIR: String): ProtoBuf.Function.Builder
 

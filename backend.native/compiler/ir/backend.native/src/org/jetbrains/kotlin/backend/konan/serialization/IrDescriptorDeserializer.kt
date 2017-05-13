@@ -66,7 +66,8 @@ internal class IrDescriptorDeserializer(val context: Context,
         val text = proto.getDebugText()
         val typeProto = localDeserializer.parentTypeTable[index]
         val type = localDeserializer.deserializeInlineType(typeProto)
-        if (type.isError) throw KonanIrDeserializationException("Could not deserialize KotlinType: $text $type")
+        if (type.isError)
+            throw KonanIrDeserializationException("Could not deserialize KotlinType: $text $type")
 
         val realType = if (proto.isCaptured) {
             unpackCapturedType(type)
@@ -358,7 +359,6 @@ internal class IrDescriptorDeserializer(val context: Context,
         constructors: Collection<DeclarationDescriptor>,
         descriptorProto: KonanIr.KotlinDescriptor): 
         DeserializedClassConstructorDescriptor {
-
         val originalIndex = descriptorProto.originalIndex
         return constructors.single {
             it.uniqId == originalIndex

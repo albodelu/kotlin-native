@@ -48,19 +48,21 @@ import org.jetbrains.kotlin.serialization.deserialization.descriptors.*
 import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.TypeProjectionImpl
 import org.jetbrains.kotlin.types.TypeSubstitutor
+import org.jetbrains.kotlin.serialization.KonanDescriptorSerializer
 
 
 internal class IrSerializer(val context: Context, 
     val descriptorTable: DescriptorTable,
     val stringTable: KonanStringTable, 
     val util: KonanSerializationUtil, 
-    val typeSerializer: ((KotlinType)->Int),
+    /*val typeSerializer: ((KotlinType)->Int),*/
+    val localDescriptorSerializer: KonanDescriptorSerializer,
     var rootFunction: FunctionDescriptor) {
 
     val loopIndex = mutableMapOf<IrLoop, Int>()
     var currentLoopIndex = 0
     val irDescriptorSerializer = IrDescriptorSerializer(context,
-        descriptorTable, stringTable, typeSerializer, rootFunction)
+        descriptorTable, stringTable, /*typeSerializer,*/ util, localDescriptorSerializer, rootFunction)
 
     fun serializeInlineBody(): String {
         val declaration = context.ir.originalModuleIndex.functions[rootFunction]!!
@@ -581,28 +583,17 @@ internal class IrSerializer(val context: Context,
         context.log{"### serializing Declaration: ${ir2string(declaration)}"}
 
         val descriptor = declaration.descriptor
-        var kotlinDescriptor = serializeDescriptor(descriptor)
-        if (descriptor != rootFunction) {
-            val realDescriptor = util.serializeLocalDeclaration(descriptor)
-            val localDeclaration = KonanIr.LocalDeclaration
-                .newBuilder()
-                .setDescriptor(realDescriptor)
-                .build()
-            kotlinDescriptor = kotlinDescriptor
-                .toBuilder()
-                .setIrLocalDeclaration(localDeclaration)
-                .build()
-        } else if (descriptor is ClassDescriptor) {
-            // TODO
-            context.log{"Can't serialize local class declarations in inline functions yet"}
+        if (descriptor == rootFunction) {
+            util.initContext(localDescriptorSerializer)
+        } else if (!(declaration is IrVariable)) {
+            util.pushContext(descriptor)
         }
 
-        val coordinates = serializeCoordinates(declaration.startOffset, declaration.endOffset)
-        val proto = KonanIr.IrDeclaration.newBuilder()
-            //.setKind(declaration.irKind())
-            .setDescriptor(kotlinDescriptor)
-            .setCoordinates(coordinates)
-
+        var kotlinDescriptor = serializeDescriptor(descriptor)
+        var realDescriptor: KonanIr.DeclarationDescriptor? = null
+        if (descriptor != rootFunction) {
+            realDescriptor = util.serializeLocalDeclaration(descriptor)
+        }
         val declarator = KonanIr.IrDeclarator.newBuilder()
 
         when (declaration) {
@@ -621,6 +612,26 @@ internal class IrSerializer(val context: Context,
                 TODO("Declaration serialization not supported yet: $declaration")
             }
         }
+
+        if (!(declaration is IrVariable)) util.popContext(descriptor)
+        if (descriptor != rootFunction) {
+
+            val localDeclaration = KonanIr.LocalDeclaration
+                .newBuilder()
+                .setDescriptor(realDescriptor!!)
+                .build()
+            kotlinDescriptor = kotlinDescriptor
+                .toBuilder()
+                .setIrLocalDeclaration(localDeclaration)
+                .build()
+        }
+
+        val coordinates = serializeCoordinates(declaration.startOffset, declaration.endOffset)
+        val proto = KonanIr.IrDeclaration.newBuilder()
+            //.setKind(declaration.irKind())
+            .setDescriptor(kotlinDescriptor)
+            .setCoordinates(coordinates)
+
 
         proto.setDeclarator(declarator)
 
