@@ -152,19 +152,17 @@ internal fun deserializeModule(configuration: CompilerConfiguration,
 internal class KonanSerializationUtil(val context: Context) {
 
     val serializerExtension = KonanSerializerExtension(context, this)
-    val serializer = KonanDescriptorSerializer.createTopLevel(serializerExtension)
-    var lastClassSerializer: KonanDescriptorSerializer = serializer
+    val topSerializer = KonanDescriptorSerializer.createTopLevel(serializerExtension)
+    var localSerializer: KonanDescriptorSerializer = topSerializer
 
     fun serializeClass(packageName: FqName,
         builder: KonanLinkData.Classes.Builder,  
         classDescriptor: ClassDescriptor) {
 
-        val previousClassSerializer = lastClassSerializer
-        val localSerializer = if (classDescriptor.isExported())
-            KonanDescriptorSerializer.create(classDescriptor, serializerExtension)
-        else 
-            lastClassSerializer
-        lastClassSerializer = localSerializer
+        val previousSerializer = localSerializer
+        if (classDescriptor.isExported())
+            localSerializer = KonanDescriptorSerializer.create(classDescriptor, serializerExtension)
+
         val classProto = localSerializer.classProto(classDescriptor).build()
             ?: error("Class not serialized: $classDescriptor")
 
@@ -175,7 +173,8 @@ internal class KonanSerializationUtil(val context: Context) {
         serializeClasses(packageName, builder, 
             classDescriptor.unsubstitutedInnerClassesScope
                 .getContributedDescriptors(DescriptorKindFilter.CLASSIFIERS))
-        lastClassSerializer = previousClassSerializer
+
+        localSerializer = previousSerializer
     }
 
     fun serializeClasses(packageName: FqName, 
@@ -215,7 +214,7 @@ internal class KonanSerializationUtil(val context: Context) {
         serializeClasses(fqName, classesBuilder, classifierDescriptors)
         val classesProto = classesBuilder.build()
 
-        val packageProto = serializer.packagePartProto(fqName, members).build()
+        val packageProto = topSerializer.packagePartProto(fqName, members).build()
             ?: error("Package fragments not serialized: $fragments")
 
         val strings = serializerExtension.stringTable
@@ -311,8 +310,6 @@ internal class KonanSerializationUtil(val context: Context) {
         context.log{"### serializeLocalDeclaration: $descriptor"}
 
         val parent = descriptor.classOrPackage
-
-        val localSerializer = lastClassSerializer
 
         when (descriptor) {
             is ClassConstructorDescriptor ->
