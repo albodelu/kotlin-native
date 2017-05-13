@@ -77,10 +77,10 @@ internal class IrDescriptorDeserializer(val context: Context,
         return realType
     }
 
-    fun deserializeLocalDeclaration(irProto: KonanIr.KotlinDescriptor, parent: DeclarationDescriptor): DeclarationDescriptor {
+    fun deserializeLocalDeclaration(irProto: KonanIr.KotlinDescriptor): DeclarationDescriptor {
         val localDeclarationProto = irProto.irLocalDeclaration.descriptor
         val index = irProto.index
-        val localDeserializer = LocalDeclarationDeserializer(parent)
+        //val localDeserializer = LocalDeclarationDeserializer(parent)
         val descriptor: DeclarationDescriptor = when(localDeclarationProto.descriptorCase) {
             FUNCTION ->
                 localDeserializer.deserializeFunction(irProto)
@@ -128,11 +128,11 @@ internal class IrDescriptorDeserializer(val context: Context,
     }
 
 
-    fun deserializeDescriptor(proto: KonanIr.KotlinDescriptor, parent: DeclarationDescriptor? = null): DeclarationDescriptor {
+    fun deserializeDescriptor(proto: KonanIr.KotlinDescriptor): DeclarationDescriptor {
 
         context.log{"### deserializeDescriptor ${proto.kind} ${proto.index}"}
         val descriptor = if (proto.hasIrLocalDeclaration()) {
-            deserializeLocalDeclaration(proto, parent!!)
+            deserializeLocalDeclaration(proto)
         } else 
             deserializeKnownDescriptor(proto)
         

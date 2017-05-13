@@ -24,57 +24,82 @@ import org.jetbrains.kotlin.serialization.KonanIr
 import org.jetbrains.kotlin.serialization.KonanLinkData
 import org.jetbrains.kotlin.serialization.ProtoBuf
 import org.jetbrains.kotlin.serialization.ProtoBuf.QualifiedNameTable.QualifiedName
-import org.jetbrains.kotlin.serialization.deserialization.MemberDeserializer
-import org.jetbrains.kotlin.serialization.deserialization.NameResolverImpl
-import org.jetbrains.kotlin.serialization.deserialization.TypeTable
+import org.jetbrains.kotlin.serialization.deserialization.*
 import org.jetbrains.kotlin.serialization.deserialization.descriptors.*
 import org.jetbrains.kotlin.serialization.deserialization.descriptors.SinceKotlinInfoTable
-import org.jetbrains.kotlin.serialization.deserialization.findClassAcrossModuleDependencies
 import org.jetbrains.kotlin.types.KotlinType
+import org.jetbrains.kotlin.backend.common.peek
+import org.jetbrains.kotlin.backend.common.push
+import org.jetbrains.kotlin.backend.common.pop
 
 // This class knows how to construct contexts for 
 // MemberDeserializer to deserialize descriptors declared in IR.
 // Eventually, these descriptors shall be reconstructed from IR declarations,
 // or may be just go away completely.
 
-class LocalDeclarationDeserializer(val parentDescriptor: DeclarationDescriptor) {
+class LocalDeclarationDeserializer(val rootDescriptor: DeclarationDescriptor) {
 
-    val tower: List<DeclarationDescriptor> = (listOf(parentDescriptor) + parentDescriptor.allContainingDeclarations()).reversed()
+    val tower: List<DeclarationDescriptor> = 
+        (listOf(rootDescriptor) + rootDescriptor.allContainingDeclarations()).reversed()
     init {
-        assert(tower[0] is ModuleDescriptor)
+        assert(tower.first() is ModuleDescriptor)
     }
-    val pkg = tower[1] as KonanPackageFragment
-    // skip the module and the package
-    val parents = tower.drop(2)
+    val parents = tower.drop(1)
 
+    val pkg = parents.first() as KonanPackageFragment
     val components = pkg.components
     val nameTable = pkg.proto.nameTable
     val nameResolver = NameResolverImpl(pkg.proto.stringTable, nameTable)
-    val packageTypeTable = TypeTable(pkg.proto.getPackage().typeTable)
-    val packageContext = components.createContext(
-        pkg, nameResolver, packageTypeTable, SinceKotlinInfoTable.EMPTY, null)
   
-    var parentContext = packageContext
-    var parentTypeTable = packageTypeTable
+    val contextStack = mutableListOf<Pair<DeserializationContext, MemberDeserializer>>()
 
     init {
-        // Now walk down all the containing declarations to construct
-        // the tower of deserialization contexts.
         parents.forEach{
-            // Only packages and classes have their type tables.
-            if (it is DeserializedClassDescriptor) {
-                parentTypeTable = TypeTable(it.classProto.typeTable)
-            }
-            parentContext = parentContext.childContext(
-                    it, it.typeParameterProtos, nameResolver, parentTypeTable)
+            pushContext(it)
         }
     }
 
-    val typeParameterProtos = parentDescriptor.typeParameterProtos
+    val parentContext: DeserializationContext
+        get() = contextStack.peek()!!.first
 
-    val typeDeserializer = parentContext.typeDeserializer
+    val parentTypeTable: TypeTable
+        get() = parentContext.typeTable
 
-    val memberDeserializer = MemberDeserializer(parentContext)
+    val typeDeserializer: TypeDeserializer
+        get() = parentContext.typeDeserializer
+
+    val memberDeserializer: MemberDeserializer
+        get() = contextStack.peek()!!.second
+
+    fun newContext(descriptor: DeclarationDescriptor): DeserializationContext {
+        if (descriptor is KonanPackageFragment) {
+            val packageTypeTable = TypeTable(pkg.proto.getPackage().typeTable)
+            return components.createContext(
+                pkg, nameResolver, packageTypeTable, SinceKotlinInfoTable.EMPTY, null)
+        }
+
+        // Only packages and classes have their type tables.
+        val typeTable = if (descriptor is DeserializedClassDescriptor) {
+            TypeTable(descriptor.classProto.typeTable)
+        } else {
+            parentTypeTable
+        }
+
+        val oldContext = contextStack.peek()!!.first
+
+        return oldContext.childContext(descriptor, 
+            descriptor.typeParameterProtos, nameResolver, typeTable)
+    }
+
+    fun pushContext(descriptor: DeclarationDescriptor) {
+        val newContext = newContext(descriptor)
+        contextStack.push(Pair(newContext, MemberDeserializer(newContext)))
+    }
+
+    fun popContext(descriptor: DeclarationDescriptor) {
+        assert(contextStack.peek()!!.first.containingDeclaration == descriptor)
+        contextStack.pop()
+    }
 
     fun deserializeInlineType(type: ProtoBuf.Type): KotlinType {
         val result = typeDeserializer.type(type)

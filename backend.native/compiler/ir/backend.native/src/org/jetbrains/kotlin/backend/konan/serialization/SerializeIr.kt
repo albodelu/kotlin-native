@@ -650,13 +650,11 @@ internal class IrDeserializer(val context: Context,
     val descriptorDeserializer = IrDescriptorDeserializer(
         context, rootMember, localDeserializer)
 
-    var currentParent: DeclarationDescriptor = rootMember
-
     fun deserializeKotlinType(proto: KonanIr.KotlinType) 
         = descriptorDeserializer.deserializeKotlinType(proto)
 
-    fun deserializeDescriptor(proto: KonanIr.KotlinDescriptor, parent: DeclarationDescriptor? = null) 
-        = descriptorDeserializer.deserializeDescriptor(proto, parent)
+    fun deserializeDescriptor(proto: KonanIr.KotlinDescriptor) 
+        = descriptorDeserializer.deserializeDescriptor(proto)
 
     fun deserializeTypeMap(descriptor: CallableDescriptor, proto: KonanIr.TypeMap): 
         Map<TypeParameterDescriptor, KotlinType> {
@@ -1073,10 +1071,7 @@ internal class IrDeserializer(val context: Context,
     fun deserializeIrVariable(proto: KonanIr.IrVar, descriptor: VariableDescriptor, 
         start: Int, end: Int, origin: IrDeclarationOrigin): IrVariable {
 
-        val previousParent = currentParent
-        currentParent = descriptor.containingDeclaration
         val initializer = deserializeExpression(proto.getInitializer())
-        currentParent = previousParent
         val variable = IrVariableImpl(start, end, origin, descriptor, initializer)
 
         return variable
@@ -1096,9 +1091,10 @@ internal class IrDeserializer(val context: Context,
 
     fun deserializeDeclaration(proto: KonanIr.IrDeclaration): IrDeclaration {
 
-        val descriptor = deserializeDescriptor(proto.descriptor, currentParent)
-        val previousParent = currentParent
-        currentParent = descriptor
+        val descriptor = deserializeDescriptor(proto.descriptor)
+
+        if (!(descriptor is VariableDescriptor) && descriptor != rootFunction)
+            localDeserializer.pushContext(descriptor)
 
         val start = proto.getCoordinates().getStartOffset()
         val end = proto.getCoordinates().getEndOffset()
@@ -1122,7 +1118,9 @@ internal class IrDeserializer(val context: Context,
                 TODO("Declaration deserialization not implemented")
             }
         }
-        currentParent = previousParent
+
+        if (!(descriptor is VariableDescriptor) && descriptor != rootFunction)
+            localDeserializer.popContext(descriptor)
         context.log{"Deserialized declaration: ${ir2string(declaration)}"}
         return declaration
     }
@@ -1140,7 +1138,7 @@ internal class IrDeserializer(val context: Context,
     fun adaptDeserializedTypeParameters(declaration: IrDeclaration): IrDeclaration {
 
         val rootFunctionTypeParameters = 
-            LocalDeclarationDeserializer(rootMember).parentContext.typeDeserializer.ownTypeParameters
+            localDeserializer.typeDeserializer.ownTypeParameters
 
         val realTypeParameters =
             rootFunction.deserializedPropertyIfAccessor.typeParameters

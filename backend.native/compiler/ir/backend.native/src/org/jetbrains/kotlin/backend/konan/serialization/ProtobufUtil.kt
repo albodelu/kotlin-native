@@ -98,7 +98,7 @@ internal val DeclarationDescriptor.typeParameterProtos: List<ProtoBuf.TypeParame
             -> this.proto.typeParameterList
         is DeserializedClassConstructorDescriptor
             -> listOf()
-        else -> error("Unexpected descriptor kind")
+        else -> error("Unexpected descriptor kind: $this")
     }
 
 
