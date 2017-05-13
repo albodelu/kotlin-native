@@ -230,11 +230,11 @@ class KonanDescriptorSerializer private constructor(
         if (extension is IrAwareExtension) {
             descriptor.getter?.onlyIf({needsSerializedIr}) {
                 extension.addGetterIR(builder,
-                    extension.serializeInlineBody(it, /*{it -> local.typeId(it)}*/local))
+                    extension.serializeInlineBody(it, local))
             }
             descriptor.setter?.onlyIf({needsSerializedIr}) {
                 extension.addSetterIR(builder,
-                    extension.serializeInlineBody(it, /*{it -> local.typeId(it)}*/local))
+                    extension.serializeInlineBody(it, local))
             }
         }
 
@@ -298,7 +298,7 @@ class KonanDescriptorSerializer private constructor(
         if (extension is IrAwareExtension
                 && descriptor.needsSerializedIr) {
             extension.addFunctionIR(builder,
-                    extension.serializeInlineBody(descriptor, /*{it -> local.typeId(it)}*/local))
+                    extension.serializeInlineBody(descriptor, local))
         }
 
         return builder
@@ -327,7 +327,7 @@ class KonanDescriptorSerializer private constructor(
         if (extension is IrAwareExtension 
             && descriptor.needsSerializedIr) {
             extension.addConstructorIR(builder, 
-                extension.serializeInlineBody(descriptor,/* {it -> local.typeId(it)}*/local))
+                extension.serializeInlineBody(descriptor, local))
         }
 
         return builder

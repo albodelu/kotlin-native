@@ -18,10 +18,9 @@ package org.jetbrains.kotlin.backend.konan.serialization
 
 
 import org.jetbrains.kotlin.backend.common.DeepCopyIrTreeWithDescriptors
-import org.jetbrains.kotlin.backend.common.ScopeWithIr
 import org.jetbrains.kotlin.backend.konan.Context
-import org.jetbrains.kotlin.backend.konan.descriptors.*
-import org.jetbrains.kotlin.backend.konan.KonanIrDeserializationException
+import org.jetbrains.kotlin.backend.konan.descriptors.deserializedPropertyIfAccessor
+import org.jetbrains.kotlin.backend.konan.descriptors.isDeserializableCallable
 import org.jetbrains.kotlin.backend.konan.ir.ir2string
 import org.jetbrains.kotlin.backend.konan.ir.ir2stringWhole
 import org.jetbrains.kotlin.backend.konan.llvm.base64Decode
@@ -29,7 +28,6 @@ import org.jetbrains.kotlin.backend.konan.llvm.base64Encode
 import org.jetbrains.kotlin.descriptors.*
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.IrStatement
-import org.jetbrains.kotlin.ir.builders.Scope
 import org.jetbrains.kotlin.ir.declarations.*
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin.DEFINED
 import org.jetbrains.kotlin.ir.declarations.impl.IrClassImpl
@@ -40,29 +38,32 @@ import org.jetbrains.kotlin.ir.expressions.*
 import org.jetbrains.kotlin.ir.expressions.impl.*
 import org.jetbrains.kotlin.ir.symbols.impl.createFunctionSymbol
 import org.jetbrains.kotlin.ir.util.createParameterDeclarations
+import org.jetbrains.kotlin.serialization.KonanDescriptorSerializer
 import org.jetbrains.kotlin.serialization.KonanIr
 import org.jetbrains.kotlin.serialization.KonanIr.IrConst.ValueCase.*
 import org.jetbrains.kotlin.serialization.KonanIr.IrOperation.OperationCase.*
 import org.jetbrains.kotlin.serialization.KonanLinkData
-import org.jetbrains.kotlin.serialization.deserialization.descriptors.*
+import org.jetbrains.kotlin.serialization.deserialization.descriptors.DeserializedClassConstructorDescriptor
+import org.jetbrains.kotlin.serialization.deserialization.descriptors.DeserializedPropertyDescriptor
+import org.jetbrains.kotlin.serialization.deserialization.descriptors.DeserializedSimpleFunctionDescriptor
 import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.TypeProjectionImpl
 import org.jetbrains.kotlin.types.TypeSubstitutor
-import org.jetbrains.kotlin.serialization.KonanDescriptorSerializer
 
 
 internal class IrSerializer(val context: Context, 
     val descriptorTable: DescriptorTable,
     val stringTable: KonanStringTable, 
-    val util: KonanSerializationUtil, 
-    /*val typeSerializer: ((KotlinType)->Int),*/
-    val localDescriptorSerializer: KonanDescriptorSerializer,
+    val rootFunctionSerializer: KonanDescriptorSerializer,
     var rootFunction: FunctionDescriptor) {
 
     val loopIndex = mutableMapOf<IrLoop, Int>()
     var currentLoopIndex = 0
-    val irDescriptorSerializer = IrDescriptorSerializer(context,
-        descriptorTable, stringTable, /*typeSerializer,*/ util, localDescriptorSerializer, rootFunction)
+    val localDeclarationSerializer 
+        = LocalDeclarationSerializer(context, rootFunctionSerializer)
+    val irDescriptorSerializer 
+        = IrDescriptorSerializer(context, descriptorTable, 
+            stringTable, localDeclarationSerializer, rootFunction)
 
     fun serializeInlineBody(): String {
         val declaration = context.ir.originalModuleIndex.functions[rootFunction]!!
@@ -583,16 +584,16 @@ internal class IrSerializer(val context: Context,
         context.log{"### serializing Declaration: ${ir2string(declaration)}"}
 
         val descriptor = declaration.descriptor
-        if (descriptor == rootFunction) {
-            util.initContext(localDescriptorSerializer)
-        } else if (!(declaration is IrVariable)) {
-            util.pushContext(descriptor)
+
+        if (descriptor != rootFunction &&
+            !(declaration is IrVariable)) {
+            localDeclarationSerializer.pushContext(descriptor)
         }
 
         var kotlinDescriptor = serializeDescriptor(descriptor)
         var realDescriptor: KonanIr.DeclarationDescriptor? = null
         if (descriptor != rootFunction) {
-            realDescriptor = util.serializeLocalDeclaration(descriptor)
+            realDescriptor = localDeclarationSerializer.serializeLocalDeclaration(descriptor)
         }
         val declarator = KonanIr.IrDeclarator.newBuilder()
 
@@ -613,9 +614,11 @@ internal class IrSerializer(val context: Context,
             }
         }
 
-        if (!(declaration is IrVariable)) util.popContext(descriptor)
-        if (descriptor != rootFunction) {
+        if (!(declaration is IrVariable)) {
+            localDeclarationSerializer.popContext(descriptor)
+        }
 
+        if (descriptor != rootFunction) {
             val localDeclaration = KonanIr.LocalDeclaration
                 .newBuilder()
                 .setDescriptor(realDescriptor!!)

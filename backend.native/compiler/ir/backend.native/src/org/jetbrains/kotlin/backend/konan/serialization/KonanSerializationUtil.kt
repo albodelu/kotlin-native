@@ -25,11 +25,6 @@ import org.jetbrains.kotlin.backend.konan.llvm.isExported
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.descriptors.*
-import org.jetbrains.kotlin.descriptors.CallableMemberDescriptor.Kind.DECLARATION
-import org.jetbrains.kotlin.descriptors.Modality.FINAL
-import org.jetbrains.kotlin.descriptors.SourceElement.NO_SOURCE
-import org.jetbrains.kotlin.descriptors.Visibilities.INTERNAL
-import org.jetbrains.kotlin.descriptors.annotations.Annotations.Companion.EMPTY
 import org.jetbrains.kotlin.descriptors.impl.LocalVariableDescriptor
 import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.descriptors.impl.PropertyDescriptorImpl
@@ -42,7 +37,6 @@ import org.jetbrains.kotlin.resolve.DescriptorUtils
 import org.jetbrains.kotlin.resolve.scopes.DescriptorKindFilter
 import org.jetbrains.kotlin.resolve.scopes.MemberScope
 import org.jetbrains.kotlin.serialization.KonanDescriptorSerializer
-import org.jetbrains.kotlin.serialization.KonanIr
 import org.jetbrains.kotlin.serialization.KonanLinkData
 import org.jetbrains.kotlin.serialization.ProtoBuf
 import org.jetbrains.kotlin.serialization.deserialization.*
@@ -50,9 +44,6 @@ import org.jetbrains.kotlin.storage.LockBasedStorageManager
 import org.jetbrains.kotlin.storage.StorageManager
 import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.SimpleType
-import org.jetbrains.kotlin.backend.common.peek
-import org.jetbrains.kotlin.backend.common.push
-import org.jetbrains.kotlin.backend.common.pop
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 import java.io.InputStream
@@ -68,12 +59,6 @@ import java.io.ByteArrayOutputStream
  * to the KonanDescriptorSerializer class.
  * The lower level deserializations are performed by the frontend
  * with MemberDeserializer class.
- *
- * It also provides a service to IR serializer to serialize descriptors
- * not included into the public descriptor tree. 
- * I.e. function local declarations.
- * Mostly by delegating to KonanDescriptorSerializer too.
- * The counterpart deserialzation is provided by LocalDeclarationDesrializer class.
  */
 
 typealias Base64 = String
@@ -171,32 +156,32 @@ internal fun deserializeModule(configuration: CompilerConfiguration,
 
 internal class KonanSerializationUtil(val context: Context) {
 
-    val serializerExtension = KonanSerializerExtension(context, this)
+    val serializerExtension = KonanSerializerExtension(context)
     val topSerializer = KonanDescriptorSerializer.createTopLevel(serializerExtension)
-    var localSerializer: KonanDescriptorSerializer = topSerializer
+    var classSerializer: KonanDescriptorSerializer = topSerializer
 
     fun serializeClass(packageName: FqName,
         builder: KonanLinkData.Classes.Builder,  
         classDescriptor: ClassDescriptor) {
 
-        val previousSerializer = localSerializer
+        val previousSerializer = classSerializer
 
         // TODO: this is to filter out object{}. Change me.
         if (classDescriptor.isExported()) 
-            localSerializer = KonanDescriptorSerializer.create(classDescriptor, serializerExtension)
+            classSerializer = KonanDescriptorSerializer.create(classDescriptor, serializerExtension)
 
-        val classProto = localSerializer.classProto(classDescriptor).build()
+        val classProto = classSerializer.classProto(classDescriptor).build()
             ?: error("Class not serialized: $classDescriptor")
 
         builder.addClasses(classProto)
-        val index = localSerializer.stringTable.getFqNameIndex(classDescriptor)
+        val index = classSerializer.stringTable.getFqNameIndex(classDescriptor)
         builder.addClassName(index)
 
         serializeClasses(packageName, builder, 
             classDescriptor.unsubstitutedInnerClassesScope
                 .getContributedDescriptors(DescriptorKindFilter.CLASSIFIERS))
 
-        localSerializer = previousSerializer
+        classSerializer = previousSerializer
     }
 
     fun serializeClasses(packageName: FqName, 
@@ -291,106 +276,5 @@ internal class KonanSerializationUtil(val context: Context) {
         val library = byteArrayToBase64(libraryAsByteArray)
         return LinkData(library, fragments, fragmentNames)
     }
-
-    /* The section below is specific for IR serialization */
-
-    // TODO: We utilize DescriptorSerializer's property 
-    // serialization to serialize variables for now.
-    // Need to negotiate the ability to deserialize 
-    // variables with the big kotlin somehow.
-    fun variableAsProperty(variable: VariableDescriptor): PropertyDescriptor {
-
-        val isDelegated = when (variable) {
-            is LocalVariableDescriptor -> variable.isDelegated
-            is IrTemporaryVariableDescriptor -> false
-            else -> error("Unexpected variable descriptor.")
-        }
-
-        val property = PropertyDescriptorImpl.create(
-                variable.containingDeclaration,
-                EMPTY,
-                FINAL,
-                INTERNAL,
-                variable.isVar(),
-                variable.name,
-                DECLARATION,
-                NO_SOURCE,
-                false, false, false, false, false, 
-                isDelegated)
-
-        property.setType(variable.type, listOf(), null, null as KotlinType?)
-
-        // TODO: transform the getter and the setter too.
-        property.initialize(null, null)
-        return property
-    }
-
-    // TODO: This is not exactly correct.
-    // It rather should be the root function context,
-    // but it is in KonanDescriptorSerializer.
-    // May be we just need to expose it instead of the
-    // type serializer from there.
-    private val contextStack = mutableListOf<KonanDescriptorSerializer>()
-
-    fun initContext(serializer: KonanDescriptorSerializer) {
-println("init context: $serializer")
-        contextStack.push(serializer)
-
-    }
-
-    fun pushContext(descriptor: DeclarationDescriptor) {
-println("push context: $descriptor")
-        val previousContext = contextStack.peek()!!
-
-        val newSerializer = previousContext.createChildSerializer(descriptor)
-        contextStack.push(newSerializer)
-    }
-
-    fun popContext(descriptor: DeclarationDescriptor) {
-        //assert(contextStack.peek()!!.containingDeclaration == descriptor)
-println("pop context: $descriptor")
-        contextStack.pop()
-    }
-
-    val typeSerializer: ((KotlinType)->Int)
-        get() = {it -> contextStack.peek()!!.typeId(it)}
-
-    fun serializeLocalDeclaration(descriptor: DeclarationDescriptor): KonanIr.DeclarationDescriptor {
-
-        val proto = KonanIr.DeclarationDescriptor.newBuilder()
-
-        context.log{"### serializeLocalDeclaration: $descriptor"}
-
-        val parent = descriptor.classOrPackage
-
-        val localSerializer = contextStack.peek()!!
-
-        when (descriptor) {
-            is ClassConstructorDescriptor ->
-                proto.setConstructor(localSerializer.constructorProto(descriptor))
-
-            is FunctionDescriptor ->
-                proto.setFunction(localSerializer.functionProto(descriptor))
-
-            is PropertyDescriptor ->
-                proto.setProperty(localSerializer.propertyProto(descriptor))
-
-            is ClassDescriptor ->
-                proto.setClazz(localSerializer.classProto(descriptor))
-
-            is VariableDescriptor -> {
-                val property = variableAsProperty(descriptor)
-                serializerExtension.originalVariables.put(property, descriptor)
-                proto.setProperty(localSerializer.propertyProto(property))
-            }
-
-            else -> error("Unexpected descriptor kind: $descriptor")
-         }
-
-         return proto.build()
-     }
-
-
-
 }
 

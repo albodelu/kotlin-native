@@ -39,9 +39,7 @@ internal class IrDescriptorSerializer(
     val context: Context,
     val descriptorTable: DescriptorTable,
     val stringTable: KonanStringTable,
-    //var typeSerializer: ((KotlinType)->Int),
-    val util: KonanSerializationUtil, 
-    val localDescriptorSerializer: KonanDescriptorSerializer,
+    val localDeclarationSerializer: LocalDeclarationSerializer, 
     var rootFunction: FunctionDescriptor) {
 
     fun serializeKotlinType(type: KotlinType): KonanIr.KotlinType {
@@ -51,7 +49,7 @@ internal class IrDescriptorSerializer(
         } else {
             type
         }
-        val index = util.typeSerializer(typeToSerialize)
+        val index = localDeclarationSerializer.typeSerializer(typeToSerialize)
         val proto = KonanIr.KotlinType.newBuilder()
             .setIndex(index)
             .setDebugText(type.toString())
@@ -94,7 +92,7 @@ internal class IrDescriptorSerializer(
             // natural order of declaration. Otherwise 
             // they appear in the order of appearence in the 
             // body of the function, and get wrong indices.
-            util.typeSerializer(it.defaultType)
+            localDeclarationSerializer.typeSerializer(it.defaultType)
         }
 
         descriptor.valueParameters.forEach {
